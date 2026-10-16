@@ -1,0 +1,19 @@
+{
+  "name": "lynto-contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lynto smart contracts - USDC prepaid payment infrastructure for autonomous software",
+  "scripts": {
+    "build": "forge build",
+    "test": "forge test -vvv",
+    "test:gas": "forge test --gas-report",
+    "coverage": "forge coverage",
+    "deploy:local": "forge script script/Deploy.s.sol --rpc-url http://127.0.0.1:8545 --broadcast",
+    "deploy:testnet": "forge script script/Deploy.s.sol --rpc-url $ARC_TESTNET_RPC --broadcast --verify",
+    "deploy:mainnet": "forge script script/Deploy.s.sol --rpc-url $ARC_RPC --broadcast --verify",
+    "anvil": "anvil"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.4.0"
+  }
+}

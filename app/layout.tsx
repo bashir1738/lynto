@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description:
     "Deposit USDC. Use APIs. Settle automatically. Prepaid balances, offchain metering, batched onchain settlement on Arc.",
   icons: {
-    icon: "/lynto-L-neon-yellow.svg",
+    icon: "/images/lynto-L-neon-yellow.svg",
   },
 };
 
@@ -18,7 +18,7 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body>
+      <body className="font-sans">
         <Providers>{children}</Providers>
       </body>
     </html>
