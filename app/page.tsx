@@ -146,7 +146,7 @@ interface ILyntoPayments {
   ];
 
   return (
-    <div className="w-full min-h-screen bg-[#FAF9F5] text-[#191A16] font-sans overflow-x-hidden selection:bg-[#F6E469] selection:text-[#191A16]">
+    <div className="w-full min-h-screen bg-[#FAF9F5] text-[#191A16] font-sans [overflow-x:clip] selection:bg-[#FCFF52] selection:text-[#0A0A0A]">
       {/* ── Hero Section (Neon Yellow Background + 3D Rolling "Lynto" Cube) ── */}
       <section className="relative w-full bg-celo-yellow text-[#191A16] border-b border-[#EAE7DE] py-20 sm:py-28 lg:py-36 flex flex-col items-center justify-center overflow-hidden">
 
@@ -234,7 +234,7 @@ interface ILyntoPayments {
       </section>
 
       {/* ── Sticky Header / Navbar ── */}
-      <nav className="sticky top-0 z-40 border-b-4 border-black bg-[#FAF9F5]/95 backdrop-blur-md text-[#191A16] shadow-lg">
+      <nav className="sticky top-0 z-50 border-b-4 border-black bg-[#FAF9F5]/95 backdrop-blur-md text-[#191A16] shadow-lg transition-all duration-200">
         <div className="mx-auto flex h-16 sm:h-20 lg:h-24 max-w-7xl xl:max-w-[1400px] items-center justify-between px-4 sm:px-6 md:px-8 lg:px-12">
           <Link href="/" className="flex items-center gap-2.5 group">
             <img

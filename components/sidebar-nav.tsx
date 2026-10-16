@@ -68,16 +68,6 @@ export function SidebarNav() {
           </Link>
         );
       })}
-
-      <div className="mt-6 px-3">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-gray-500">
-          Network
-        </div>
-        <div className="mt-2 flex items-center gap-2 text-xs text-gray-400">
-          <span className="h-1.5 w-1.5 rounded-full bg-celo-yellow" />
-          Arc · USDC
-        </div>
-      </div>
     </nav>
   );
 }

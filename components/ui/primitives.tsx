@@ -110,6 +110,19 @@ export function Badge({ status }: { status: string }) {
   );
 }
 
+export function Skeleton({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "relative overflow-hidden rounded-lg bg-[#EAE7DE]/70",
+        className
+      )}
+    >
+      <div className="absolute inset-0 -translate-x-full animate-[shimmer_1.6s_infinite] bg-gradient-to-r from-transparent via-white/70 to-transparent" />
+    </div>
+  );
+}
+
 export function EmptyState({
   title,
   description,
@@ -118,20 +131,95 @@ export function EmptyState({
   description?: string;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border-strong bg-surface-muted py-12 text-center">
-      <p className="text-sm font-medium text-slate-600">{title}</p>
+    <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-[#EAE7DE] bg-[#FAF9F5] py-12 text-center">
+      <p className="text-sm font-semibold text-[#55584F]">{title}</p>
       {description ? (
-        <p className="mt-1 max-w-sm text-sm text-slate-500">{description}</p>
+        <p className="mt-1 max-w-sm text-sm text-[#9A9C93]">{description}</p>
       ) : null}
     </div>
   );
 }
 
+/** Skeleton shimmer that mimics a loaded card grid (replaces spinners). */
 export function LoadingState({ label = "Loading…" }: { label?: string }) {
   return (
-    <div className="flex items-center justify-center py-12 text-sm text-slate-500">
-      <span className="mr-2 inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-accent" />
-      {label}
+    <div
+      className="space-y-8"
+      role="status"
+      aria-live="polite"
+      aria-busy="true"
+    >
+      <span className="sr-only">{label}</span>
+      {/* Header */}
+      <div className="space-y-2">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-4 w-80 max-w-full" />
+      </div>
+      {/* Live flow */}
+      <div className="rounded-3xl border border-[#EAE7DE] bg-white p-6">
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-56 max-w-full" />
+          </div>
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-[#EAE7DE] bg-[#FAF9F5] p-4">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="mt-3 h-6 w-20" />
+              <Skeleton className="mt-2 h-3 w-full" />
+            </div>
+          ))}
+        </div>
+      </div>
+      {/* Stat tiles */}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="rounded-3xl border border-[#EAE7DE] bg-white p-6">
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="mt-3 h-8 w-28" />
+            <Skeleton className="mt-2 h-3 w-20" />
+          </div>
+        ))}
+      </div>
+      {/* Content cards */}
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="rounded-3xl border border-[#EAE7DE] bg-white p-6 xl:col-span-2">
+          <Skeleton className="h-4 w-36" />
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-[#EAE7DE] bg-[#FAF9F5] p-4">
+                <Skeleton className="h-3 w-20" />
+                <Skeleton className="mt-2 h-4 w-16" />
+              </div>
+            ))}
+          </div>
+        </div>
+        <div className="rounded-3xl border border-[#EAE7DE] bg-white p-5">
+          <Skeleton className="h-4 w-32" />
+          <div className="mt-4 space-y-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Compact skeleton for a single card/panel while its data loads. */
+export function PanelSkeleton({ rows = 3 }: { rows?: number }) {
+  return (
+    <div className="rounded-3xl border border-[#EAE7DE] bg-white p-5" role="status" aria-busy="true">
+      <Skeleton className="h-4 w-32" />
+      <div className="mt-4 space-y-3">
+        {Array.from({ length: rows }).map((_, i) => (
+          <Skeleton key={i} className="h-8 w-full rounded-xl" />
+        ))}
+      </div>
     </div>
   );
 }

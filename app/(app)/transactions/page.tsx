@@ -175,7 +175,7 @@ export default function TransactionsPage() {
       ) : visible.length === 0 ? (
         <EmptyState
           title="No settlement batches"
-          description="Trigger a settlement after the demo agent accrues usage, or wait for the auto-settle threshold."
+          description="Trigger a settlement once usage has accrued, or wait for the auto-settle threshold."
         />
       ) : (
         <div className="rounded-3xl border border-[#EAE7DE] bg-white overflow-hidden shadow-soft">

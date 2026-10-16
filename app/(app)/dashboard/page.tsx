@@ -204,7 +204,7 @@ export default function DashboardPage() {
           <div className="mt-4">
             <EmptyState
               title="No settlements yet"
-              description="Run the demo agent or accrue usage, then settle from the operator panel."
+              description="Settle from the operator panel once usage has accrued."
             />
           </div>
         ) : (

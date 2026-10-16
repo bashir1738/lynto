@@ -2,6 +2,7 @@
 
 import useSWR from "swr";
 import { cn, formatUsdc } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/primitives";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -86,7 +87,22 @@ export function LiveFlow() {
   if (isLoading || !data) {
     return (
       <div className="rounded-3xl border border-[#EAE7DE] bg-white p-6">
-        <div className="text-sm text-[#73766D]">Loading live flow…</div>
+        <div className="flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-3 w-56 max-w-full" />
+          </div>
+          <Skeleton className="h-6 w-24 rounded-full" />
+        </div>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="rounded-2xl border border-[#EAE7DE] bg-[#FAF9F5] p-4">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="mt-3 h-6 w-20" />
+              <Skeleton className="mt-2 h-3 w-full" />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

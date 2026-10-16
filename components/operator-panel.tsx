@@ -3,6 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import { cn, formatUsdc } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/primitives";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -99,8 +100,13 @@ export function OperatorPanel() {
 
   if (!sys) {
     return (
-      <div className="rounded-3xl border border-[#EAE7DE] bg-white p-5 text-sm text-[#73766D]">
-        Loading operator status…
+      <div className="rounded-3xl border border-[#EAE7DE] bg-white p-5">
+        <Skeleton className="h-4 w-32" />
+        <div className="mt-4 grid grid-cols-2 gap-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-xl" />
+          ))}
+        </div>
       </div>
     );
   }
