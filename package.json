@@ -1,0 +1,52 @@
+{
+  "name": "lynto",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Lynto - Payments for autonomous software. Deposit USDC. Use APIs. Settle automatically.",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:studio": "prisma studio",
+    "db:seed": "tsx scripts/seed.ts",
+    "demo-agent": "tsx scripts/demo-agent.ts",
+    "test:e2e": "tsx scripts/e2e-test.ts",
+    "contracts:build": "cd contracts && forge build",
+    "contracts:test": "cd contracts && forge test -vvv"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.10.0",
+    "@rainbow-me/rainbowkit": "^2.2.11",
+    "@tanstack/react-query": "^5.80.0",
+    "@x402/core": "^2.28.0",
+    "@x402/evm": "^2.28.0",
+    "@x402/svm": "^2.28.0",
+    "clsx": "^2.1.1",
+    "dotenv": "^18.0.8",
+    "next": "^15.3.4",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "swr": "^2.5.1",
+    "tailwind-merge": "^3.3.1",
+    "viem": "^2.31.0",
+    "wagmi": "^2.15.0",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@prisma/config": "^7.10.1",
+    "@types/node": "^22.15.0",
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.4",
+    "prisma": "^6.10.0",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.20.0",
+    "typescript": "^5.8.0"
+  }
+}

@@ -1,0 +1,49 @@
+# Dependencies
+node_modules/
+.pnp/
+.pnp.*
+
+# Next.js
+.next/
+out/
+next-env.d.ts
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Database
+*.db
+*.sqlite
+
+# Contracts build artifacts
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+contracts/lib/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+/tmp/
+
+# Editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# TypeScript
+*.tsbuildinfo
+
+# Prisma
+prisma/*.db
+
+# Misc
+coverage/
+.turbo/
+.vercel

@@ -1,0 +1,91 @@
+// Lynto Prisma schema
+// PostgreSQL for persistent usage records and settlement batches.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Agent {
+  id            String          @id @default(cuid())
+  name          String
+  walletAddress String          @unique
+  apiKeyHash    String          @unique
+  status        String          @default("active") // active | paused
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  usageRecords   UsageRecord[]
+  settlementBatches SettlementBatch[]
+  reservationSyncs  ReservationSync[]
+  balanceSnapshots  BalanceSnapshot[]
+}
+
+model UsageRecord {
+  id            String    @id @default(cuid())
+  requestId     String    @unique
+  agentId       String
+  agent         Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  walletAddress String
+  endpoint      String
+  price         BigInt // USDC base units (6 decimals)
+  status        String    @default("accrued") // pending | accrued | settled | failed
+  batchId       String?
+  settlementId  String?
+  errorMessage  String?
+  createdAt     DateTime  @default(now())
+  settledAt     DateTime?
+
+  settlementBatch SettlementBatch? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  @@index([agentId, status])
+  @@index([batchId])
+  @@index([status, createdAt])
+}
+
+model SettlementBatch {
+  id           String    @id @default(cuid())
+  batchId      String    @unique
+  agentId      String
+  agent        Agent     @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  amount       BigInt
+  requestCount Int
+  status       String    @default("pending") // pending | submitted | confirmed | failed
+  txHash       String?
+  errorMessage String?
+  createdAt    DateTime  @default(now())
+  submittedAt  DateTime?
+  confirmedAt  DateTime?
+
+  usageRecords UsageRecord[]
+
+  @@index([agentId, status])
+  @@index([status, createdAt])
+}
+
+model ReservationSync {
+  id        String   @id @default(cuid())
+  agentId   String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  amount    BigInt
+  txHash    String?
+  status    String   @default("submitted") // submitted | confirmed | failed
+  createdAt DateTime @default(now())
+
+  @@index([agentId, createdAt])
+}
+
+model BalanceSnapshot {
+  id              String   @id @default(cuid())
+  agentId         String
+  agent           Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  onchainBalance  BigInt
+  reservedOnchain BigInt
+  createdAt       DateTime @default(now())
+
+  @@index([agentId, createdAt])
+}
