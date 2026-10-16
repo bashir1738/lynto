@@ -7,6 +7,29 @@ Lynto is a prepaid payment layer for AI agents and software services on [Arc](ht
 
 ---
 
+## What's built
+
+**Contracts** (`contracts/`)
+- `LyntoPayments.sol` — OpenZeppelin v5, Solidity 0.8.28, `ReentrancyGuard` + CEI. Deposit / withdraw / reserve / release / settle with unique-batch-id double-charge protection and per-agent accounting.
+- **61 passing Foundry tests** (deposits, withdrawals, reserve/release, settlement, duplicate batches, multi-agent, fuzz invariants).
+
+**Backend** (`app/api`, `lib/`)
+- Paid metering endpoint (`/api/paid-data`) with API-key auth, per-call USDC charging, and `x-request-id` idempotency.
+- Settlement engine: threshold + manual batching, reserve sync, failed-batch retry with fresh batch IDs, offchain↔onchain reconciliation.
+- Operator health endpoint (`/api/system/status`): key status, contract reachability, batch counts, reserve lag, accounting integrity.
+
+**Dashboard** (`app/(app)`)
+- **Overview** — 5-step live payment pipeline (Deposit → Meter → Reserve → Settle → Provider), key stats, agents grid, provider revenue, operator panel, funding panel.
+- **Agents** — register (API key shown once), per-agent detail, deposit/withdraw.
+- **Settlements** — filterable history, failed-batch retry, force reserve sync.
+- **Integration** — quickstart, TypeScript SDK, curl + viem snippets, HTTP API reference.
+- Mobile-responsive shell (collapsible sidebar drawer), skeleton shimmer loading, Celo yellow/black design system, Source Serif 4.
+
+**Landing page** (`app/page.tsx`)
+- Minimal yellow/black redesign, interactive savings calculator, code snippets, FAQ, animated logo cube.
+
+---
+
 ## How it works
 
 ```
@@ -16,7 +39,7 @@ Lynto is a prepaid payment layer for AI agents and software services on [Arc](ht
                                └────────┬─────────┘
                                         │ reserved / settle
 ┌────────────┐  paid API call  ┌───────▼──────────┐   accrue usage
-│ Demo agent │ ───────────────▶│  Next.js metering │ ─────────────┐
+│ Agent      │ ───────────────▶│  Next.js metering │ ─────────────┐
 │ (Node/TS)  │ ◀───────────────│  backend          │              │
 └────────────┘  data + charge  └───────┬──────────┘              │
                                        │ batch when threshold     │
@@ -46,20 +69,34 @@ lynto/
 │   │   ├── agents/         # List/register agents
 │   │   ├── overview/       # Dashboard aggregates
 │   │   ├── settlements/    # Settlement history
-│   │   └── withdraw-prep/  # Sync reservations before withdrawal
-│   ├── dashboard/          # Overview dashboard
-│   ├── agents/             # Agent management
-│   └── transactions/       # Settlement history UI
-├── components/             # React components (wallet, funding, UI)
-├── lib/                    # arc.ts, contract.ts, db.ts, metering.ts, settlement.ts, auth.ts
+│   │   ├── withdraw-prep/  # Sync reservations before withdrawal
+│   │   └── system/status/  # Operator health & hardening endpoint
+│   ├── (app)/              # Authenticated dashboard shell
+│   │   ├── dashboard/      # Overview: live flow, stats, operator panel
+│   │   ├── agents/         # Agent management + registration form
+│   │   ├── transactions/   # Settlement history UI + hardening controls
+│   │   └── integration/    # Quickstart, SDK, curl/viem, API reference
+│   ├── page.tsx            # Public landing page
+│   └── layout.tsx          # Root layout (Source Serif 4, favicon)
+├── components/
+│   ├── app-shell.tsx       # Dashboard shell: sidebar + header + mobile drawer
+│   ├── sidebar-nav.tsx     # Sidebar navigation
+│   ├── live-flow.tsx       # 5-step live payment pipeline
+│   ├── operator-panel.tsx  # Operator status, settle, reserve-sync controls
+│   ├── funding-panel.tsx   # Deposit / withdraw UI
+│   ├── code-block.tsx      # Copyable code snippets
+│   ├── wallet-connect.tsx  # RainbowKit connect button
+│   └── ui/primitives.tsx   # Card, Stat, Badge, Skeleton, EmptyState…
+├── lib/                    # arc.ts, contract.ts, db.ts, metering.ts, settlement.ts, auth.ts, wagmi.ts, theme.ts, utils.ts
 ├── prisma/                 # PostgreSQL schema
 ├── contracts/              # Foundry project (LyntoPayments.sol)
 │   ├── src/LyntoPayments.sol
-│   ├── test/LyntoPayments.t.sol
+│   ├── test/LyntoPayments.t.sol   # 61 tests
 │   └── script/Deploy.s.sol
 ├── scripts/
 │   ├── seed.ts             # Register demo agent, print API key once
-│   └── demo-agent.ts       # Autonomous client that pays for API access
+│   ├── demo-agent.ts       # Autonomous client that pays for API access
+│   └── e2e-test.ts         # End-to-end checks against local anvil
 └── .env.example
 ```
 
@@ -228,7 +265,7 @@ pnpm demo-agent   # autonomous paid-API client
 
 ```bash
 cd contracts
-npm run test          # 43 tests: deposits, withdrawals, reserve/release,
+npm run test          # 61 tests: deposits, withdrawals, reserve/release,
                       # settlement, duplicate batches, multi-agent, fuzz invariants
 npm run test:gas
 ```
@@ -272,6 +309,7 @@ LYNTO_MODE=mainnet pnpm demo-agent  # requires HTTPS app URL + real keys
 | `/api/overview` | GET | — | Dashboard aggregates |
 | `/api/settlements` | GET | — | Settlement history + explorer links |
 | `/api/withdraw-prep` | POST | — | Force reserve sync, return withdrawable amount |
+| `/api/system/status` | GET | — | Operator health, batch counts, reserve lag, accounting integrity |
 
 **Request headers for paid calls:**
 
