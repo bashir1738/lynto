@@ -10,8 +10,8 @@ Lynto is a prepaid payment layer for AI agents and software services on [Arc](ht
 ## What's built
 
 **Contracts** (`contracts/`)
-- `LyntoPayments.sol` — OpenZeppelin v5, Solidity 0.8.28, `ReentrancyGuard` + CEI. Deposit / withdraw / reserve / release / settle with unique-batch-id double-charge protection and per-agent accounting.
-- **61 passing Foundry tests** (deposits, withdrawals, reserve/release, settlement, duplicate batches, multi-agent, fuzz invariants).
+- `LyntoPayments.sol` — OpenZeppelin v5, Solidity 0.8.28, UUPS upgradeable (ERC-7201 namespaced storage), `ReentrancyGuard` + CEI. Deposit / two-step withdraw / reserve / release / settle with unique-batch-id double-charge protection, per-agent daily spend caps, self-freeze, owner pause, and per-agent accounting.
+- **113 passing Foundry tests** (deposits, two-step withdrawals, daily cap/freeze/pause, reserve/release, settlement, duplicate batches, multi-agent, UUPS upgrade & initializer guards, fuzz invariants).
 
 **Backend** (`app/api`, `lib/`)
 - Paid metering endpoint (`/api/paid-data`) with API-key auth, per-call USDC charging, and `x-request-id` idempotency.
@@ -53,7 +53,7 @@ Lynto is a prepaid payment layer for AI agents and software services on [Arc](ht
 2. **Meter** — Each successful paid API call records a usage row (price in integer 6-decimal USDC units). Failed calls are not charged. Retries with the same `x-request-id` are idempotent.
 3. **Reserve** — Accrued unsettled usage is synced onchain via `reserve()`, locking funds so they cannot be withdrawn before settlement.
 4. **Settle** — When the threshold is reached (or manually), the operator submits one `settle(agent, amount, batchId)` transaction. Unique batch IDs prevent double settlement.
-5. **Withdraw** — Unreserved funds can be withdrawn by the agent at any time.
+5. **Withdraw** — Unreserved funds are withdrawn permissionlessly via a two-step flow: `requestWithdraw(amount)`, wait the owner-set delay (10 minutes by default), then `executeWithdraw()`. Availability is re-checked at execution time, so usage reserved during the delay can never be withdrawn.
 
 ---
 
@@ -83,16 +83,16 @@ lynto/
 │   ├── sidebar-nav.tsx     # Sidebar navigation
 │   ├── live-flow.tsx       # 5-step live payment pipeline
 │   ├── operator-panel.tsx  # Operator status, settle, reserve-sync controls
-│   ├── funding-panel.tsx   # Deposit / withdraw UI
+│   ├── funding-panel.tsx   # Deposit / two-step withdraw UI
 │   ├── code-block.tsx      # Copyable code snippets
 │   ├── wallet-connect.tsx  # RainbowKit connect button
 │   └── ui/primitives.tsx   # Card, Stat, Badge, Skeleton, EmptyState…
 ├── lib/                    # arc.ts, contract.ts, db.ts, metering.ts, settlement.ts, auth.ts, wagmi.ts, theme.ts, utils.ts
 ├── prisma/                 # PostgreSQL schema
 ├── contracts/              # Foundry project (LyntoPayments.sol)
-│   ├── src/LyntoPayments.sol
-│   ├── test/LyntoPayments.t.sol   # 61 tests
-│   └── script/Deploy.s.sol
+│   ├── src/LyntoPayments.sol       # UUPS implementation (+ LyntoPaymentsV2 mock)
+│   ├── test/                       # 113 tests: core, upgrade, cap, withdraw, release
+│   └── script/Deploy.s.sol         # Proxy deploy + UpgradeV2.s.sol
 ├── scripts/
 │   ├── seed.ts             # Register demo agent, print API key once
 │   ├── demo-agent.ts       # Autonomous client that pays for API access
@@ -123,19 +123,24 @@ Confirmed from [Arc docs](https://docs.arc.io) and [Circle USDC addresses](https
 
 ## Smart contract: `LyntoPayments.sol`
 
-OpenZeppelin v5 · Solidity 0.8.28 · `ReentrancyGuard` + CEI pattern.
+OpenZeppelin v5 · Solidity 0.8.28 · UUPS upgradeable (ERC-7201 namespaced storage) · `ReentrancyGuard` + CEI pattern.
 
 ### Functions
 
 | Function | Access | Description |
 | --- | --- | --- |
 | `deposit(amount)` | agent | `transferFrom` USDC, credit prepaid balance |
-| `withdraw(amount)` | agent | Withdraw **unreserved** funds only |
+| `requestWithdraw(amount)` | agent | Step 1: queue a withdrawal of **unreserved** funds (checked at request time) |
+| `executeWithdraw()` | agent | Step 2: execute after the delay; availability re-checked (one-shot) |
+| `cancelWithdraw()` | agent | Cancel the pending withdrawal request |
 | `reserve(agent, amount)` | operator | Lock funds for accrued unsettled usage |
-| `release(agent, amount)` | operator | Unlock reserved funds (invalidated usage) |
+| `release(agent, amount, requestId, reasonCode)` | operator | Unlock reserved funds; `reasonCode` ∈ {1: metering correction, 2: dispute/refund, 3: reconciliation} |
 | `settle(agent, amount, batchId)` | operator | Pay provider from reserved balance; mark batch settled |
 | `setOperator(op, authorized)` | owner | Manage settlement operators |
 | `setProvider(addr)` | owner | Update provider payout address |
+| `setDailyCap(cap)` / `setFrozen(bool)` | agent | Self-set daily spend cap (increases delayed 1 h) / account freeze |
+| `pause()` / `unpause()` | owner | Circuit breaker: blocks deposit/reserve/settle — never withdrawals |
+| `setWithdrawDelay(seconds)` | owner | Withdrawal delay bounds: 1 min – 1 day (default 10 min) |
 | `balanceOf / reservedOf / availableOf` | view | Accounting views |
 
 ### Accounting model
@@ -151,7 +156,7 @@ Per agent (all values in USDC base units, 6 decimals):
 | Settled | `totalSettled` | Paid out to provider |
 | Withdrawn | `totalWithdrawn` | Returned to agent wallet |
 
-**Critical rule:** Users cannot withdraw funds already reserved for accrued usage. The backend syncs `reserve()` before settlement and before the withdraw UI shows an available amount.
+**Critical rule:** Users cannot withdraw funds already reserved for accrued usage. The backend syncs `reserve()` before settlement and before the withdraw UI shows an available amount. The two-step withdrawal flow re-validates availability at execution time, closing the request-time drain window.
 
 ### Security properties (tested)
 
@@ -162,6 +167,11 @@ Per agent (all values in USDC base units, 6 decimals):
 - No admin withdrawal of user deposits
 - `nonReentrant` + checks-effects-interactions on all state-changing paths
 - Accounting conservation invariant: `balance = deposited − withdrawn − settled`
+- Two-step withdrawal: delay-gated execution re-checks `availableOf` (drain protection); pause/freeze never block withdrawals
+- Daily caps enforced on `reserve()`; cap increases take 1 h, tightening is immediate; counter floors at 0 on release
+- Owner pause blocks only deposit/reserve/settle (`ContractPaused`); unpause restores
+- UUPS upgrades owner-gated (`_authorizeUpgrade` + `UpgradeAuthorized`); re-initialization blocked
+- `release` reason codes restricted to {1, 2, 3} (`InvalidReasonCode`)
 
 **Trust model (MVP):** The settlement operator meters usage offchain and is trusted to report accurate amounts. This is **not** a trustless system. Batch IDs and reservations prevent operator double-charge of the same batch and user withdrawal of accrued funds, but the operator can still under/over-report relative to a fully decentralized metering system. Independent audits are recommended before large-value production use.
 
@@ -265,8 +275,9 @@ pnpm demo-agent   # autonomous paid-API client
 
 ```bash
 cd contracts
-npm run test          # 61 tests: deposits, withdrawals, reserve/release,
-                      # settlement, duplicate batches, multi-agent, fuzz invariants
+npm run test          # 113 tests: deposits, two-step withdrawals, daily cap /
+                      # freeze / pause, reserve/release, settlement, duplicate
+                      # batches, multi-agent, UUPS upgrade, fuzz invariants
 npm run test:gas
 ```
 
@@ -347,7 +358,7 @@ Arc Studio deploys to **Arc testnet only**. Mainnet deployment is performed by y
 6. Confirm the settlement tx on https://explorer.arc.io.
 7. Verify the hash appears in the dashboard and links to the explorer.
 8. Reconcile remaining available balance.
-9. Withdraw unused unreserved funds.
+9. Request + execute withdrawal of unused unreserved funds (two-step, 10 min default delay).
 
 Only claim a transaction as successful after its onchain receipt is verified (`status: success`).
 

@@ -78,6 +78,30 @@ export const LYNTO_PAYMENTS_ABI = [
     inputs: [],
     outputs: [{ name: "", type: "address" }],
   },
+  {
+    type: "function",
+    name: "paused",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "withdrawDelay",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "withdrawalRequestOf",
+    stateMutability: "view",
+    inputs: [{ name: "agent", type: "address" }],
+    outputs: [
+      { name: "amount", type: "uint256" },
+      { name: "executeAfter", type: "uint256" },
+    ],
+  },
   // Writes
   {
     type: "function",
@@ -88,9 +112,30 @@ export const LYNTO_PAYMENTS_ABI = [
   },
   {
     type: "function",
-    name: "withdraw",
+    name: "requestWithdraw",
     stateMutability: "nonpayable",
     inputs: [{ name: "amount", type: "uint256" }],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "executeWithdraw",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "cancelWithdraw",
+    stateMutability: "nonpayable",
+    inputs: [],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "setWithdrawDelay",
+    stateMutability: "nonpayable",
+    inputs: [{ name: "newDelay", type: "uint256" }],
     outputs: [],
   },
   {
@@ -110,6 +155,8 @@ export const LYNTO_PAYMENTS_ABI = [
     inputs: [
       { name: "agent", type: "address" },
       { name: "amount", type: "uint256" },
+      { name: "requestId", type: "uint256" },
+      { name: "reasonCode", type: "uint8" },
     ],
     outputs: [],
   },
@@ -156,6 +203,34 @@ export const LYNTO_PAYMENTS_ABI = [
     inputs: [
       { name: "agent", type: "address", indexed: true },
       { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "WithdrawRequested",
+    inputs: [
+      { name: "agent", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "executeAfter", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "WithdrawCancelled",
+    inputs: [
+      { name: "agent", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "UsageReleased",
+    inputs: [
+      { name: "agent", type: "address", indexed: true },
+      { name: "amount", type: "uint256", indexed: false },
+      { name: "requestId", type: "uint256", indexed: false },
+      { name: "reasonCode", type: "uint8", indexed: false },
+      { name: "newReserved", type: "uint256", indexed: false },
     ],
   },
   {

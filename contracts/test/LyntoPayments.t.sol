@@ -1,58 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.28;
 
-import {Test} from "forge-std/Test.sol";
+import {ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import {LyntoPayments} from "../src/LyntoPayments.sol";
-import {MockUSDC} from "./MockUSDC.sol";
+import {LyntoPaymentsBase} from "./LyntoPaymentsBase.t.sol";
 
-contract LyntoPaymentsTest is Test {
-    LyntoPayments public lynto;
-    MockUSDC public usdc;
-
-    address public owner = address(0xA11CE);
-    address public provider = address(0xBEEF);
-    address public operator = address(0x0DEA);
-    address public agent1 = address(0xA63A);
-    address public agent2 = address(0xA63B);
-    address public stranger = address(0xBAD);
-
-    uint256 constant ONE_USDC = 1e6; // 6 decimals
-    uint256 constant DECIMALS = 6;
-
-    event Deposited(address indexed agent, uint256 amount);
-    event Withdrawn(address indexed agent, uint256 amount);
-    event Reserved(address indexed agent, uint256 amount, uint256 newReserved);
-    event ReservationReleased(address indexed agent, uint256 amount, uint256 newReserved);
-    event Settled(
-        address indexed agent,
-        address indexed provider,
-        uint256 amount,
-        bytes32 indexed batchId,
-        uint256 settledAt
-    );
-    event OperatorSet(address indexed operator, bool authorized);
-    event ProviderSet(address indexed provider);
-
-    function setUp() public {
-        vm.startPrank(owner);
-        usdc = new MockUSDC();
-        lynto = new LyntoPayments(address(usdc), provider, owner);
-        lynto.setOperator(operator, true);
-        vm.stopPrank();
-
-        // Fund agents
-        usdc.mint(agent1, 100 * ONE_USDC);
-        usdc.mint(agent2, 100 * ONE_USDC);
-        usdc.mint(stranger, 100 * ONE_USDC);
-
-        vm.prank(agent1);
-        usdc.approve(address(lynto), type(uint256).max);
-        vm.prank(agent2);
-        usdc.approve(address(lynto), type(uint256).max);
-        vm.prank(stranger);
-        usdc.approve(address(lynto), type(uint256).max);
-    }
-
+contract LyntoPaymentsTest is LyntoPaymentsBase {
     // =====================================================================
     // Deposit tests
     // =====================================================================
@@ -114,8 +67,7 @@ contract LyntoPaymentsTest is Test {
         vm.prank(agent1);
         lynto.deposit(10 * ONE_USDC);
 
-        vm.prank(agent1);
-        lynto.withdraw(4 * ONE_USDC);
+        withdrawNow(agent1, 4 * ONE_USDC);
 
         assertEq(usdc.balanceOf(agent1), 94 * ONE_USDC); // 100 - 10 + 4
         assertEq(lynto.balanceOf(agent1), 6 * ONE_USDC);
@@ -128,13 +80,13 @@ contract LyntoPaymentsTest is Test {
 
         vm.prank(agent1);
         vm.expectRevert(LyntoPayments.InsufficientAvailable.selector);
-        lynto.withdraw(2 * ONE_USDC);
+        lynto.requestWithdraw(2 * ONE_USDC);
     }
 
     function test_withdraw_zeroReverts() public {
         vm.prank(agent1);
         vm.expectRevert(LyntoPayments.ZeroAmount.selector);
-        lynto.withdraw(0);
+        lynto.requestWithdraw(0);
     }
 
     function test_withdraw_reservedFundsCannotBeWithdrawn() public {
@@ -148,10 +100,9 @@ contract LyntoPaymentsTest is Test {
         // Agent can only withdraw 3
         vm.prank(agent1);
         vm.expectRevert(LyntoPayments.InsufficientAvailable.selector);
-        lynto.withdraw(4 * ONE_USDC);
+        lynto.requestWithdraw(4 * ONE_USDC);
 
-        vm.prank(agent1);
-        lynto.withdraw(3 * ONE_USDC);
+        withdrawNow(agent1, 3 * ONE_USDC);
 
         assertEq(lynto.balanceOf(agent1), 7 * ONE_USDC);
         assertEq(lynto.availableOf(agent1), 0);
@@ -162,8 +113,7 @@ contract LyntoPaymentsTest is Test {
         vm.prank(agent1);
         lynto.deposit(10 * ONE_USDC);
 
-        vm.prank(agent1);
-        lynto.withdraw(10 * ONE_USDC);
+        withdrawNow(agent1, 10 * ONE_USDC);
 
         assertEq(lynto.balanceOf(agent1), 0);
         assertEq(usdc.balanceOf(address(lynto)), 0);
@@ -221,7 +171,7 @@ contract LyntoPaymentsTest is Test {
 
         vm.startPrank(operator);
         lynto.reserve(agent1, 5 * ONE_USDC);
-        lynto.release(agent1, 2 * ONE_USDC);
+        lynto.release(agent1, 2 * ONE_USDC, 0, 1);
         vm.stopPrank();
 
         assertEq(lynto.reservedOf(agent1), 3 * ONE_USDC);
@@ -237,7 +187,7 @@ contract LyntoPaymentsTest is Test {
 
         vm.prank(operator);
         vm.expectRevert(LyntoPayments.InsufficientReserved.selector);
-        lynto.release(agent1, 3 * ONE_USDC);
+        lynto.release(agent1, 3 * ONE_USDC, 0, 1);
     }
 
     function test_release_nonOperatorReverts() public {
@@ -249,7 +199,7 @@ contract LyntoPaymentsTest is Test {
 
         vm.prank(stranger);
         vm.expectRevert(LyntoPayments.UnauthorizedOperator.selector);
-        lynto.release(agent1, 1 * ONE_USDC);
+        lynto.release(agent1, 1 * ONE_USDC, 0, 1);
     }
 
     // =====================================================================
@@ -305,9 +255,7 @@ contract LyntoPaymentsTest is Test {
 
         // Try to settle the same batchId again — must revert
         // even though reserved might allow another settle with a different id
-        vm.expectRevert(
-            abi.encodeWithSelector(LyntoPayments.BatchAlreadySettled.selector, batchId)
-        );
+        vm.expectRevert(abi.encodeWithSelector(LyntoPayments.BatchAlreadySettled.selector, batchId));
         lynto.settle(agent1, 2 * ONE_USDC, batchId);
         vm.stopPrank();
     }
@@ -361,9 +309,7 @@ contract LyntoPaymentsTest is Test {
         lynto.settle(agent1, 1 * ONE_USDC, zeroId);
 
         vm.prank(operator);
-        vm.expectRevert(
-            abi.encodeWithSelector(LyntoPayments.BatchAlreadySettled.selector, zeroId)
-        );
+        vm.expectRevert(abi.encodeWithSelector(LyntoPayments.BatchAlreadySettled.selector, zeroId));
         lynto.settle(agent1, 1 * ONE_USDC, zeroId);
     }
 
@@ -474,7 +420,7 @@ contract LyntoPaymentsTest is Test {
         // agent2 has zero balance
         vm.prank(agent2);
         vm.expectRevert(LyntoPayments.InsufficientAvailable.selector);
-        lynto.withdraw(1 * ONE_USDC);
+        lynto.requestWithdraw(1 * ONE_USDC);
     }
 
     // =====================================================================
@@ -493,8 +439,7 @@ contract LyntoPaymentsTest is Test {
         // 4 USDC left unreserved
         assertEq(lynto.availableOf(agent1), 4 * ONE_USDC);
 
-        vm.prank(agent1);
-        lynto.withdraw(4 * ONE_USDC);
+        withdrawNow(agent1, 4 * ONE_USDC);
         assertEq(lynto.balanceOf(agent1), 0);
     }
 
@@ -506,11 +451,10 @@ contract LyntoPaymentsTest is Test {
         vm.startPrank(operator);
         lynto.reserve(agent1, 6 * ONE_USDC);
         lynto.settle(agent1, 4 * ONE_USDC, keccak256("c1"));
-        lynto.release(agent1, 2 * ONE_USDC);
+        lynto.release(agent1, 2 * ONE_USDC, 0, 1);
         vm.stopPrank();
 
-        vm.prank(agent1);
-        lynto.withdraw(4 * ONE_USDC);
+        withdrawNow(agent1, 4 * ONE_USDC);
 
         // invariant: balance = deposited - withdrawn - settled
         uint256 bal = lynto.balanceOf(agent1);
@@ -525,17 +469,25 @@ contract LyntoPaymentsTest is Test {
 
     function test_constructor_zeroArgsRevert() public {
         vm.startPrank(owner);
-        // OZ Ownable reverts on zero owner before our checks
-        vm.expectRevert(
-            abi.encodeWithSignature("OwnableInvalidOwner(address)", address(0))
+        // OZ Ownable reverts on zero owner before our checks — the proxy
+        // constructor bubbles the initialize() revert data unchanged.
+        vm.expectRevert(abi.encodeWithSignature("OwnableInvalidOwner(address)", address(0)));
+        new ERC1967Proxy(
+            address(lyntoImpl),
+            abi.encodeCall(LyntoPayments.initialize, (address(usdc), provider, address(0)))
         );
-        new LyntoPayments(address(usdc), provider, address(0));
 
         vm.expectRevert(LyntoPayments.ZeroAddress.selector);
-        new LyntoPayments(address(0), provider, owner);
+        new ERC1967Proxy(
+            address(lyntoImpl),
+            abi.encodeCall(LyntoPayments.initialize, (address(0), provider, owner))
+        );
 
         vm.expectRevert(LyntoPayments.ZeroAddress.selector);
-        new LyntoPayments(address(usdc), address(0), owner);
+        new ERC1967Proxy(
+            address(lyntoImpl),
+            abi.encodeCall(LyntoPayments.initialize, (address(usdc), address(0), owner))
+        );
         vm.stopPrank();
     }
 
@@ -548,8 +500,7 @@ contract LyntoPaymentsTest is Test {
 
         assertEq(lynto.balanceOf(agent1), amount);
 
-        vm.prank(agent1);
-        lynto.withdraw(amount);
+        withdrawNow(agent1, amount);
         assertEq(lynto.balanceOf(agent1), 0);
     }
 
@@ -595,12 +546,11 @@ contract LyntoPaymentsTest is Test {
         vm.prank(agent1);
         lynto.deposit(10 * ONE_USDC);
 
-        vm.prank(agent1);
-        lynto.withdraw(10 * ONE_USDC);
+        withdrawNow(agent1, 10 * ONE_USDC);
 
         vm.prank(agent1);
         vm.expectRevert(LyntoPayments.InsufficientAvailable.selector);
-        lynto.withdraw(1 * ONE_USDC);
+        lynto.requestWithdraw(1 * ONE_USDC);
     }
 
     // =====================================================================
@@ -615,8 +565,7 @@ contract LyntoPaymentsTest is Test {
         lynto.reserve(agent1, 5 * ONE_USDC);
 
         // Agent withdraws available 5
-        vm.prank(agent1);
-        lynto.withdraw(5 * ONE_USDC);
+        withdrawNow(agent1, 5 * ONE_USDC);
         assertEq(lynto.balanceOf(agent1), 5 * ONE_USDC);
 
         // Operator settles reserved 5 — ok
@@ -672,7 +621,7 @@ contract LyntoPaymentsTest is Test {
 
         vm.startPrank(operator);
         lynto.reserve(agent1, 5 * ONE_USDC);
-        lynto.release(agent1, 4 * ONE_USDC); // only 1 left reserved
+        lynto.release(agent1, 4 * ONE_USDC, 0, 1); // only 1 left reserved
         vm.expectRevert(LyntoPayments.InsufficientReserved.selector);
         lynto.settle(agent1, 2 * ONE_USDC, keccak256("rel"));
         lynto.settle(agent1, 1 * ONE_USDC, keccak256("rel-ok"));
@@ -703,12 +652,11 @@ contract LyntoPaymentsTest is Test {
         lynto.reserve(agent1, 3 * ONE_USDC);
 
         // Exactly available (7) must succeed; 7+1 must fail.
-        vm.prank(agent1);
-        lynto.withdraw(7 * ONE_USDC);
+        withdrawNow(agent1, 7 * ONE_USDC);
 
         vm.prank(agent1);
         vm.expectRevert(LyntoPayments.InsufficientAvailable.selector);
-        lynto.withdraw(1);
+        lynto.requestWithdraw(1);
     }
 
     function test_setProvider_settlePaysNewProvider() public {
@@ -773,13 +721,11 @@ contract LyntoPaymentsTest is Test {
         lynto.reserve(agent1, 5 * ONE_USDC);
         lynto.reserve(agent2, 1 * ONE_USDC);
         lynto.settle(agent1, 2 * ONE_USDC, keccak256("sol1"));
-        lynto.release(agent1, 1 * ONE_USDC);
+        lynto.release(agent1, 1 * ONE_USDC, 0, 1);
         vm.stopPrank();
 
-        vm.prank(agent1);
-        lynto.withdraw(2 * ONE_USDC);
-        vm.prank(stranger);
-        lynto.withdraw(1 * ONE_USDC);
+        withdrawNow(agent1, 2 * ONE_USDC);
+        withdrawNow(stranger, 1 * ONE_USDC);
 
         uint256 sum = lynto.balanceOf(agent1) + lynto.balanceOf(agent2) + lynto.balanceOf(stranger);
         assertEq(usdc.balanceOf(address(lynto)), sum);
@@ -802,7 +748,7 @@ contract LyntoPaymentsTest is Test {
 
         vm.startPrank(operator);
         if (r1 > 0) lynto.reserve(agent1, r1);
-        if (rel > 0) lynto.release(agent1, rel);
+        if (rel > 0) lynto.release(agent1, rel, 0, 1);
         vm.stopPrank();
 
         assertEq(lynto.reservedOf(agent1), r1 - rel);
@@ -810,11 +756,7 @@ contract LyntoPaymentsTest is Test {
         assertEq(lynto.balanceOf(agent1), dep);
     }
 
-    function testFuzz_multipleAgentsNoCrossTalk(
-        uint96 a1dep,
-        uint96 a2dep,
-        uint96 a1res
-    ) public {
+    function testFuzz_multipleAgentsNoCrossTalk(uint96 a1dep, uint96 a2dep, uint96 a1res) public {
         a1dep = uint96(bound(a1dep, 1, 50 * ONE_USDC));
         a2dep = uint96(bound(a2dep, 1, 50 * ONE_USDC));
         a1res = uint96(bound(a1res, 0, a1dep));
@@ -840,13 +782,13 @@ contract LyntoPaymentsTest is Test {
     function test_release_zeroAmountReverts() public {
         vm.prank(operator);
         vm.expectRevert(LyntoPayments.ZeroAmount.selector);
-        lynto.release(agent1, 0);
+        lynto.release(agent1, 0, 0, 1);
     }
 
     function test_release_zeroAgentReverts() public {
         vm.prank(operator);
         vm.expectRevert(LyntoPayments.ZeroAddress.selector);
-        lynto.release(address(0), 1);
+        lynto.release(address(0), 1, 0, 1);
     }
 
     function test_settle_eventProviderMatchesCurrentProvider() public {
@@ -868,8 +810,7 @@ contract LyntoPaymentsTest is Test {
         lynto.deposit(amount);
         assertEq(usdc.balanceOf(address(lynto)), amount);
 
-        vm.prank(agent1);
-        lynto.withdraw(amount);
+        withdrawNow(agent1, amount);
         assertEq(usdc.balanceOf(address(lynto)), 0);
         assertEq(lynto.totalWithdrawn(agent1), amount);
         assertEq(lynto.totalDeposited(agent1), amount);

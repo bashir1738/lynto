@@ -124,7 +124,22 @@ await wallet.writeContract({
   args: [usdc6(1)],
 });
 
-// Withdraw only availableOf(agent) — never reserved funds
+// Withdraw in two steps — only availableOf(agent), never reserved funds:
+// 1) request, 2) wait withdrawDelay() (10 min default), 3) execute
+await wallet.writeContract({
+  address: LYNTO,
+  abi: [{ name: "requestWithdraw", type: "function", inputs: [
+    { name: "amount", type: "uint256" },
+  ], outputs: [] }],
+  functionName: "requestWithdraw",
+  args: [usdc6(1)],
+});
+// …after withdrawDelay() has elapsed:
+await wallet.writeContract({
+  address: LYNTO,
+  abi: [{ name: "executeWithdraw", type: "function", inputs: [], outputs: [] }],
+  functionName: "executeWithdraw",
+});
 `;
 
 const PRICING = `Price per successful call : 0.001 USDC (1_000 base units)
@@ -133,6 +148,7 @@ Idempotency              : x-request-id (UUID) — safe retries
 Failure policy           : failed requests are NOT charged
 Settlement               : batched by operator; unique batchId onchain
 Reserved funds           : locked so agents cannot withdraw accrued usage
+Withdrawals              : two-step (request → delay → execute), 10 min default
 `;
 
 export default function IntegrationPage() {

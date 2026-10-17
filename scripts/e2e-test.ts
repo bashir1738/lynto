@@ -79,12 +79,26 @@ async function main() {
   const usdcAddr = JSON.parse(usdcDeploy).deployedTo as string;
   console.log("  MockUSDC:", usdcAddr);
 
+  // LyntoPayments is UUPS-upgradeable: deploy the bare implementation,
+  // then an ERC1967Proxy whose constructor forwards initialize().
+  const lyntoImplDeploy = execSync(
+    `forge create src/LyntoPayments.sol:LyntoPayments --rpc-url ${RPC} --private-key ${anvilKey} --json`,
+    { cwd: "contracts", encoding: "utf8" }
+  );
+  const lyntoImplAddr = JSON.parse(lyntoImplDeploy).deployedTo as string;
+  console.log("  LyntoPayments impl:", lyntoImplAddr);
+
+  const initData = execSync(
+    `cast abi-encode "initialize(address,address,address)" ${usdcAddr} ${provider.address} ${funder.address}`,
+    { encoding: "utf8" }
+  ).trim();
+
   const lyntoDeploy = execSync(
-    `forge create src/LyntoPayments.sol:LyntoPayments --rpc-url ${RPC} --private-key ${anvilKey} --json --constructor-args ${usdcAddr} ${provider.address} ${funder.address}`,
+    `forge create @openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy --rpc-url ${RPC} --private-key ${anvilKey} --json --constructor-args ${lyntoImplAddr} ${initData}`,
     { cwd: "contracts", encoding: "utf8" }
   );
   const lyntoAddr = JSON.parse(lyntoDeploy).deployedTo as string;
-  console.log("  LyntoPayments:", lyntoAddr);
+  console.log("  LyntoPayments proxy:", lyntoAddr);
 
   // Authorize operator (funder) via cast
   execSync(

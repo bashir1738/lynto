@@ -78,6 +78,21 @@ export function FundingPanel({
     query: { enabled: Boolean(contractAddress && targetAddress) },
   });
 
+  const { data: withdrawalReq, refetch: refetchWithdrawal } = useReadContract({
+    address: contractAddress,
+    abi: LYNTO_PAYMENTS_ABI,
+    functionName: "withdrawalRequestOf",
+    args: targetAddress ? [targetAddress] : undefined,
+    query: { enabled: Boolean(contractAddress && targetAddress) },
+  });
+
+  const { data: withdrawDelay } = useReadContract({
+    address: contractAddress,
+    abi: LYNTO_PAYMENTS_ABI,
+    functionName: "withdrawDelay",
+    query: { enabled: Boolean(contractAddress) },
+  });
+
   // Writes
   const {
     writeContract,
@@ -99,6 +114,15 @@ export function FundingPanel({
     "approve" | "deposit" | "withdraw" | null
   >(null);
 
+  // Two-step withdrawal state: (amount, executeAfter); executeAfter = 0 → none.
+  const withdrawalTuple = withdrawalReq as readonly [bigint, bigint] | undefined;
+  const pendingWithdrawAmount = withdrawalTuple?.[0] ?? 0n;
+  const executeAfter = withdrawalTuple?.[1] ?? 0n;
+  const hasPendingWithdraw = executeAfter > 0n;
+  const withdrawReady =
+    hasPendingWithdraw &&
+    BigInt(Math.floor(Date.now() / 1000)) >= executeAfter;
+
   async function refreshAll() {
     await Promise.all([
       refetchUsdc(),
@@ -106,6 +130,7 @@ export function FundingPanel({
       refetchBalance(),
       refetchAvailable(),
       refetchReserved(),
+      refetchWithdrawal(),
     ]);
   }
 
@@ -173,6 +198,28 @@ export function FundingPanel({
       setError("Contract address not configured.");
       return;
     }
+    // Step 2: a matured request can be executed.
+    if (hasPendingWithdraw) {
+      if (!withdrawReady) {
+        setError(
+          `Withdrawal is still in its security delay — unlocks at ${new Date(
+            Number(executeAfter) * 1000
+          ).toLocaleTimeString()}.`
+        );
+        return;
+      }
+      setLastAction("withdraw");
+      writeContract(
+        {
+          address: contractAddress,
+          abi: LYNTO_PAYMENTS_ABI,
+          functionName: "executeWithdraw",
+        },
+        { onError: (e) => setError(e.message) }
+      );
+      return;
+    }
+    // Step 1: queue the withdrawal (enforced against availableOf onchain).
     const value = parseUsdc(amount || "0");
     if (value <= 0n) {
       setError("Enter a positive amount.");
@@ -183,7 +230,7 @@ export function FundingPanel({
       {
         address: contractAddress,
         abi: LYNTO_PAYMENTS_ABI,
-        functionName: "withdraw",
+        functionName: "requestWithdraw",
         args: [value],
       },
       { onError: (e) => setError(e.message) }
@@ -360,6 +407,18 @@ export function FundingPanel({
         </p>
       )}
 
+      {mode === "withdraw" && hasPendingWithdraw && (
+        <p className="mt-3 rounded-md bg-slate-50 px-3 py-2 text-sm">
+          Pending withdrawal:{" "}
+          <span className="mono">{formatUsdc(pendingWithdrawAmount)} USDC</span>{" "}
+          {withdrawReady
+            ? "— delay elapsed, ready to execute."
+            : `— unlocks at ${new Date(
+                Number(executeAfter) * 1000
+              ).toLocaleTimeString()} (default 10 min delay).`}
+        </p>
+      )}
+
       <div className="mt-4 flex flex-wrap gap-2">
         {mode === "deposit" ? (
           <>
@@ -384,9 +443,19 @@ export function FundingPanel({
             <button
               className="btn-primary"
               onClick={onWithdraw}
-              disabled={isWriting || isConfirming}
+              disabled={
+                isWriting ||
+                isConfirming ||
+                (hasPendingWithdraw && !withdrawReady)
+              }
             >
-              {isWriting || isConfirming ? "Submitting…" : "Withdraw"}
+              {isWriting || isConfirming
+                ? "Submitting…"
+                : hasPendingWithdraw
+                  ? withdrawReady
+                    ? "Execute withdrawal"
+                    : "Withdrawal pending…"
+                  : "Request withdrawal"}
             </button>
           </>
         )}

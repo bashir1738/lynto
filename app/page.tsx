@@ -72,8 +72,8 @@ async def query_market_intelligence():
 
     sol: `// SPDX-License-Identifier: MIT
 interface ILyntoPayments {
-    // 1. Owner deposits prepaid USDC escrow for an agent
-    function deposit(address agent, uint256 amount) external;
+    // 1. Owner deposits prepaid USDC escrow (credited to their agent wallet)
+    function deposit(uint256 amount) external;
 
     // 2. Operator consolidates 10,000 offchain queries in 1 Arc transaction
     function settle(
@@ -82,8 +82,10 @@ interface ILyntoPayments {
         bytes32 batchId
     ) external;
 
-    // 3. Agent owner retains instant permissionless withdrawal anytime
-    function withdraw(uint256 amount) external;
+    // 3. Owner withdraws permissionlessly via a delayed two-step flow:
+    //    request, wait the security delay (10 min default), execute
+    function requestWithdraw(uint256 amount) external;
+    function executeWithdraw() external;
 }`,
   };
 
@@ -102,7 +104,7 @@ interface ILyntoPayments {
     },
     {
       q: "Can an agent owner withdraw deposited funds at any time?",
-      a: "Yes. Any unreserved deposited USDC can be withdrawn immediately by calling withdraw(amount) on the Arc smart contract without requiring permission or intervention from the service provider.",
+      a: "Yes. Any unreserved deposited USDC can be withdrawn without permission from the service provider. For safety the contract enforces a two-step flow: the owner calls requestWithdraw(amount), waits the withdrawal delay (10 minutes by default, owner-configurable up to 1 day), then calls executeWithdraw(). Usage reserved during the delay can never be withdrawn — only funds that are available at execution time are paid out.",
     },
     {
       q: "Why is Lynto built natively on Circle's Arc network?",
@@ -115,7 +117,7 @@ interface ILyntoPayments {
       id: "01",
       title: "Prepaid Smart Escrow",
       category: "Arc Non-Custodial Contract",
-      desc: "Agent owner deposits USDC into the LyntoPayments contract on Arc Layer 1. Balance is verifiable onchain, with instant withdrawal rights preserved 24/7.",
+      desc: "Agent owner deposits USDC into the LyntoPayments contract on Arc Layer 1. Balance is verifiable onchain, with non-custodial withdrawal rights preserved 24/7 via a short two-step delay.",
       code: "contract.deposit(agentWallet, 50.00 USDC)",
       badge: "Onchain Verified",
     },
@@ -374,7 +376,7 @@ interface ILyntoPayments {
               {
                 v: "100%",
                 l: "Non-Custodial",
-                s: "Prepaid escrow with instant owner withdrawal rights.",
+                s: "Prepaid escrow with permissionless owner withdrawals (two-step, ~10 min delay).",
               },
             ].map((m) => (
               <div
@@ -417,7 +419,7 @@ interface ILyntoPayments {
                 step: "01",
                 title: "Deposit Smart Escrow",
                 badge: "Arc L1",
-                desc: "Fund prepaid USDC into the LyntoPayments contract on Arc. Your balance is verifiable onchain with permissionless instant withdrawal anytime.",
+                desc: "Fund prepaid USDC into the LyntoPayments contract on Arc. Your balance is verifiable onchain with permissionless withdrawals anytime via a short two-step delay.",
                 code: "contract.deposit(agent, 50.00 USDC)",
               },
               {
